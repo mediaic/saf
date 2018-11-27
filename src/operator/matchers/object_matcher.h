@@ -34,39 +34,31 @@ class TrackInfo {
         tag_(tag),
         mapped_(false),
         summarization_mode_(summarization_mode) {
-    features_.set_capacity(30);
   }
 
   void UpdateFeature(int source_idx, unsigned long last_timestamp,
                      const std::vector<double>& feature) {
     source_idx_ = source_idx;
     last_timestamp_ = last_timestamp;
-    features_.push_back(feature);
 
     // SummarizeTrackFeature
-    if (summarization_mode_.compare("avg") == 0) {
-      summarized_feature_ = std::vector<double>(feature.size(), 0.f);
-      for (const auto& m : features_) {
-        for (size_t i = 0; i < m.size(); i++) {
-          summarized_feature_[i] += m[i];
+    if (summarized_feature_.size() == 0) {
+      summarized_feature_ = std::vector<double>(feature);
+    } else {
+      if (summarization_mode_.compare("avg") == 0) {
+        for (size_t i = 0; i < feature.size(); i++) {
+          summarized_feature_[i] = 0.9 * summarized_feature_[i] + 0.1 * feature[i];
         }
-      }
-      for (auto& m : summarized_feature_) {
-        m /= features_.size();
-      }
-    } else if (summarization_mode_.compare("max") == 0) {
-      summarized_feature_ = std::vector<double>(
-          feature.size(), std::numeric_limits<double>::min());
-      for (const auto& m : features_) {
-        for (size_t i = 0; i < m.size(); i++) {
-          if (m[i] > summarized_feature_[i]) {
-            summarized_feature_[i] = m[i];
+      } else if (summarization_mode_.compare("max") == 0) {
+        for (size_t i = 0; i < feature.size(); i++) {
+          if (feature[i] > summarized_feature_[i]) {
+            summarized_feature_[i] = feature[i];
           }
         }
+      } else {
+        LOG(FATAL) << "Matcher summarization mode " << summarization_mode_
+                   << " not supported.";
       }
-    } else {
-      LOG(FATAL) << "Matcher summarization mode " << summarization_mode_
-                 << " not supported.";
     }
   }
 
@@ -86,7 +78,6 @@ class TrackInfo {
   std::string tag_;
   int source_idx_;
   unsigned long last_timestamp_;
-  boost::circular_buffer<std::vector<double>> features_;
   std::vector<double> summarized_feature_;
   bool mapped_;
   std::string summarization_mode_;
