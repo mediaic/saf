@@ -130,6 +130,15 @@ CameraManager::CameraManager() {
     if (camera_value.find("mask") != nullptr) {
       camera->mask_ = camera_value.get<std::string>("mask");
     }
+    if (camera_value.find("extrinsic_matrix") != nullptr) {
+      camera->extrinsic_mat_ = camera_value.get<std::string>("extrinsic_matrix");
+    }
+    if (camera_value.find("intrinsic_matrix") != nullptr) {
+      camera->intrinsic_mat_ = camera_value.get<std::string>("intrinsic_matrix");
+    }
+    if (camera_value.find("distort_coef") != nullptr) {
+      camera->distort_coef_ = camera_value.get<std::string>("distort_coef");
+    }
 
     cameras_.emplace(name, camera);
   }

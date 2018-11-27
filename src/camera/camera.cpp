@@ -116,3 +116,6 @@ void Camera::MoveDown() { ExecuteAndCheck((tile_down_command_ + " &")); }
 void Camera::MoveLeft() { ExecuteAndCheck((pan_left_command_ + " &")); }
 void Camera::MoveRight() { ExecuteAndCheck((pan_right_command_ + " &")); }
 std::string Camera::GetMask() { return mask_; }
+std::string Camera::GetIntrinsicMat() { return intrinsic_mat_; }
+std::string Camera::GetExtrinsicMat() { return extrinsic_mat_; }
+std::string Camera::GetDistortCoef() { return distort_coef_; }

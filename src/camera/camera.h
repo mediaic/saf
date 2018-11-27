@@ -83,6 +83,9 @@ class Camera : public Operator {
   static const char* kCaptureTimeMicrosKey;
 
   std::string GetMask();
+  std::string GetIntrinsicMat();
+  std::string GetExtrinsicMat();
+  std::string GetDistortCoef();
  protected:
   virtual bool Init() override = 0;
   virtual bool OnStop() override = 0;
@@ -102,6 +105,9 @@ class Camera : public Operator {
   // Counter to set camera specific frame id
   unsigned long frame_id_;
   std::string mask_;
+  std::string intrinsic_mat_;
+  std::string extrinsic_mat_;
+  std::string distort_coef_;
 };
 
 #endif  // SAF_CAMERA_CAMERA_H_
