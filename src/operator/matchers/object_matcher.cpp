@@ -216,7 +216,6 @@ void ObjectMatcher::ReIDThread() {
             mapped_ids[j] = m.second->GetID();
             mapped_count++;
             m.second->UpdateFeature(source_idx, timestamp, feature);
-            CHECK(m.second->GetMapped() == false);
             m.second->SetMapped(true);
             break;
           }
