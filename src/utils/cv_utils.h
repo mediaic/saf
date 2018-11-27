@@ -130,4 +130,14 @@ inline bool InsideImage(const cv::Rect& rt, const cv::Mat& image) {
           (y + h <= image.rows));
 }
 
+inline bool IntersectMask(const cv::Rect& rt, const std::vector<cv::Rect>& mask) {
+  for (auto m : mask) {
+    cv::Rect intersects = rt & m;
+    if (intersects.area() > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 #endif  // SAF_UTILS_CV_UTILS_H_

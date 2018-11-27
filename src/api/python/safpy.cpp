@@ -130,8 +130,8 @@ std::shared_ptr<Operator> SafPython::CreateDetector(
 }
 
 std::shared_ptr<Operator> SafPython::CreateTracker(
-    const std::string& tracker_type) {
-  return std::make_shared<ObjectTracker>(tracker_type);
+    const std::string& tracker_type, const std::string& mask){
+  return std::make_shared<ObjectTracker>(tracker_type, mask);
 }
 
 std::shared_ptr<Operator> SafPython::CreateExtractor(

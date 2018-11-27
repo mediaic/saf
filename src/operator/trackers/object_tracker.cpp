@@ -20,15 +20,18 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <fstream>
 
 #include "common/context.h"
 #include "operator/trackers/dlib_tracker.h"
 #include "operator/trackers/kf_tracker.h"
 #include "utils/cv_utils.h"
 
-ObjectTracker::ObjectTracker(const std::string& type)
+ObjectTracker::ObjectTracker(const std::string& type, const std::string& mask)
     : Operator(OPERATOR_TYPE_OBJECT_TRACKER, {"input"}, {"output"}),
-      type_(type) {}
+      type_(type) {
+  ReadMaskFile(mask);
+}
 
 std::shared_ptr<ObjectTracker> ObjectTracker::Create(
     const FactoryParamsType& params) {
@@ -74,7 +77,7 @@ void ObjectTracker::Process() {
       bool on_track = (*it)->TrackGetPossibleBB(gray_image_, untracked_bboxes,
                                                 untracked_tags, rt);
       if (on_track) {
-        if (InsideImage(rt, gray_image_)) {
+        if (InsideImage(rt, gray_image_) && !IntersectMask(rt, mask_)) {
           tracked_bboxes.push_back(Rect(rt.x, rt.y, rt.width, rt.height));
           tracked_tags.push_back((*it)->GetTag());
           tracked_ids.push_back((*it)->GetId());
@@ -111,7 +114,7 @@ void ObjectTracker::Process() {
       CHECK(new_tracker->IsInitialized());
       new_tracker->Track(gray_image_);
       cv::Rect rt(new_tracker->GetBB());
-      if (InsideImage(rt, gray_image_)) {
+      if (InsideImage(rt, gray_image_) && !IntersectMask(rt, mask_)) {
         tracked_bboxes.push_back(Rect(rt.x, rt.y, rt.width, rt.height));
         tracked_tags.push_back(untracked_tags[i]);
         tracked_ids.push_back(id_str);
@@ -130,7 +133,7 @@ void ObjectTracker::Process() {
     for (auto it = tracker_list_.begin(); it != tracker_list_.end(); ++it) {
       (*it)->Track(gray_image_);
       cv::Rect rt((*it)->GetBB());
-      if (InsideImage(rt, gray_image_)) {
+      if (InsideImage(rt, gray_image_) && !IntersectMask(rt, mask_)) {
         tracked_bboxes.push_back(Rect(rt.x, rt.y, rt.width, rt.height));
         tracked_tags.push_back((*it)->GetTag());
         tracked_ids.push_back((*it)->GetId());
@@ -145,4 +148,40 @@ void ObjectTracker::Process() {
   frame->SetValue("features", features);
   PushFrame("output", std::move(frame));
   LOG(INFO) << "ObjectTracker took " << timer.ElapsedMSec() << " ms";
+}
+
+void ObjectTracker::ReadMaskFile(const std::string& fname) {
+  LOG(INFO) << "Tracker mask file: " << fname;
+  std::ifstream in(fname);
+  std::string line;
+  std::vector<int> buff(565248);
+  size_t rows = 0, cols = 0;
+   if (in.is_open()) {
+    while (std::getline(in, line)) {
+      char* ptr = (char*)line.c_str();
+      size_t len = line.length();
+      size_t temp_cols = 0;
+      char* start = ptr;
+      for (size_t i = 0; i < len; i++) {
+        if (ptr[i] == ',') {
+          buff[rows*cols+temp_cols++] = atoi(start);
+          start = ptr + i + 1;
+        }
+      }
+      buff[rows*cols+temp_cols++] = atoi(start);
+      cols = temp_cols;
+      rows++;
+    }
+    in.close();
+  } else {
+    return;
+  }
+  CHECK(cols == 4);
+   for (size_t i = 0; i < rows; i++) {
+    int x = buff[i*4];
+    int y = buff[i*4+1];
+    int w = buff[i*4+2];
+    int h = buff[i*4+3];
+    mask_.push_back(cv::Rect(x, y, w, h));
+  }
 }

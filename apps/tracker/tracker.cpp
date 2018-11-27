@@ -115,7 +115,7 @@ void Run(const std::vector<std::string>& camera_names,
 
   // tracker
   for (size_t i = 0; i < batch_size; i++) {
-    std::shared_ptr<Operator> tracker(new ObjectTracker(tracker_type));
+    std::shared_ptr<Operator> tracker(new ObjectTracker(tracker_type, cameras[i]->GetMask()));
     tracker->SetSource("input",
                        object_detector->GetSink("output" + std::to_string(i)));
     trackers.push_back(tracker);

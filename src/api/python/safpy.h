@@ -45,7 +45,7 @@ class SafPython {
       float detector_idle_duration = 0.f, int face_min_size = 40,
       const boost::python::list& targets = boost::python::list(),
       size_t batch_size = 1);
-  std::shared_ptr<Operator> CreateTracker(const std::string& tracker_type);
+  std::shared_ptr<Operator> CreateTracker(const std::string& tracker_type, const std::string& mask);
   std::shared_ptr<Operator> CreateExtractor(const std::string& extractor_type,
                                             const std::string& extractor_model,
                                             size_t batch_size = 1);

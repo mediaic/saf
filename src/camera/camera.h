@@ -82,6 +82,7 @@ class Camera : public Operator {
 
   static const char* kCaptureTimeMicrosKey;
 
+  std::string GetMask();
  protected:
   virtual bool Init() override = 0;
   virtual bool OnStop() override = 0;
@@ -100,6 +101,7 @@ class Camera : public Operator {
   std::shared_ptr<Stream> stream_;
   // Counter to set camera specific frame id
   unsigned long frame_id_;
+  std::string mask_;
 };
 
 #endif  // SAF_CAMERA_CAMERA_H_

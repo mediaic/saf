@@ -68,7 +68,7 @@ class BaseTracker {
 
 class ObjectTracker : public Operator {
  public:
-  ObjectTracker(const std::string& type);
+  ObjectTracker(const std::string& type, const std::string& mask);
   static std::shared_ptr<ObjectTracker> Create(const FactoryParamsType& params);
 
  protected:
@@ -77,10 +77,13 @@ class ObjectTracker : public Operator {
   virtual void Process() override;
 
  private:
+  void ReadMaskFile(const std::string& fname);
+
   std::string type_;
   std::list<std::shared_ptr<BaseTracker>> tracker_list_;
   cv::Mat gray_image_;
   std::chrono::time_point<std::chrono::system_clock> last_calibration_time_;
+  std::vector<cv::Rect> mask_;
 };
 
 #endif  // SAF_OPERATOR_TRACKERS_OBJECT_TRACKER_H_

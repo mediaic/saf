@@ -127,6 +127,10 @@ CameraManager::CameraManager() {
     camera->pan_left_command_ = pan_left_command;
     camera->pan_right_command_ = pan_right_command;
 
+    if (camera_value.find("mask") != nullptr) {
+      camera->mask_ = camera_value.get<std::string>("mask");
+    }
+
     cameras_.emplace(name, camera);
   }
 }

@@ -115,3 +115,4 @@ void Camera::MoveUp() { ExecuteAndCheck(tile_up_command_ + " &"); }
 void Camera::MoveDown() { ExecuteAndCheck((tile_down_command_ + " &")); }
 void Camera::MoveLeft() { ExecuteAndCheck((pan_left_command_ + " &")); }
 void Camera::MoveRight() { ExecuteAndCheck((pan_right_command_ + " &")); }
+std::string Camera::GetMask() { return mask_; }
