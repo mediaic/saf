@@ -34,13 +34,11 @@ class XQDAMatcher : public BaseMatcher {
   XQDAMatcher(const ModelDesc& model_desc) : model_desc_(model_desc) {}
   virtual ~XQDAMatcher() {}
   virtual bool Init() {
-    W.resize(4096, 138);
-    M.resize(138, 138);
     // Load "W.txt" & "M_xqda.txt"
     std::string model_file = model_desc_.GetModelParamsPath();
     std::string weights_file = model_desc_.GetModelDescPath();
-    read_matrix_file(model_file, W, 4096, 138);
-    read_matrix_file(weights_file, M, 138, 138);
+    W = read_matrix_file(model_file);
+    M = read_matrix_file(weights_file);
 
     return true;
   }
@@ -51,8 +49,8 @@ class XQDAMatcher : public BaseMatcher {
     std::vector<double> feat2_copy(feat2);
     double* feat1_ptr = &feat1_copy[0];
     double* feat2_ptr = &feat2_copy[0];
-    Eigen::Map<Eigen::VectorXd> Xg(feat1_ptr, 4096);
-    Eigen::Map<Eigen::VectorXd> Xp(feat2_ptr, 4096);
+    Eigen::Map<Eigen::VectorXd> Xg(feat1_ptr, W.rows());
+    Eigen::Map<Eigen::VectorXd> Xp(feat2_ptr, W.rows());
 
     Xg = Xg / Xg.norm();
     Xp = Xp / Xp.norm();
@@ -71,33 +69,46 @@ class XQDAMatcher : public BaseMatcher {
   Eigen::MatrixXd M;
   ModelDesc model_desc_;
 
-  bool read_matrix_file(const std::string& fname, Eigen::MatrixXd& m, int rows,
-                        int cols) {
-    (void)rows;
-    (void)cols;
-    std::ifstream in(fname);
-    std::string line;
-    int row = 0;
-    int col = 0;
+  Eigen::MatrixXd read_matrix_file(const std::string& fname) {
+   std::ifstream in(fname);
+   std::string line;
+   //std::vector<float> buff(565248);
+   std::vector<float> buff;
+   size_t rows = 0, cols = 0;
 
-    if (in.is_open()) {
-      while (std::getline(in, line)) {
-        char* ptr = (char*)line.c_str();
-        int len = line.length();
-        col = 0;
-        char* start = ptr;
-        for (int i = 0; i < len; i++) {
-          if (ptr[i] == ',') {
-            m(row, col++) = atof(start);
-            start = ptr + i + 1;
-          }
-        }
-        m(row, col) = atof(start);
-        row++;
-      }
-      in.close();
-    }
-    return true;
+   if (in.is_open()) {
+     while (std::getline(in, line)) {
+       char* ptr = (char*)line.c_str();
+       size_t len = line.length();
+       size_t temp_cols = 0;
+       char* start = ptr;
+       for (size_t i = 0; i < len; i++) {
+         if (ptr[i] == ',') {
+           //buff[rows*cols+temp_cols++] = atof(start);
+           buff.push_back(atof(start));
+           temp_cols++;
+           start = ptr + i + 1;
+         }
+       }
+       //buff[rows*cols+temp_cols++] = atof(start);
+       buff.push_back(atof(start));
+       temp_cols++;
+       cols = temp_cols;
+       rows++;
+     }
+     in.close();
+   } else {
+     LOG(FATAL) << "Could not load matrix file" << fname;
+   }
+
+   Eigen::MatrixXd result(rows, cols);
+   for (size_t i = 0; i < rows; i++) {
+     for (size_t j = 0; j < cols; j++) {
+       result(i, j) = buff[i*cols+j];
+     }
+   }
+
+   return result;
   }
 };
 
