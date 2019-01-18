@@ -93,10 +93,7 @@ void ObjectMatcher::Process() {
 
     auto camera_name = frame->GetValue<std::string>("camera_name");
     auto ids = frame->GetValue<std::vector<std::string>>("ids");
-    auto timestamp =
-        GetTimeSinceEpochMicros(frame->GetValue<boost::posix_time::ptime>(
-            Camera::kCaptureTimeMicrosKey)) /
-        1000;
+    auto timestamp = GetTimeSinceEpochMillis();
     auto tags = frame->GetValue<std::vector<std::string>>("tags");
     auto features =
         frame->GetValue<std::vector<std::vector<double>>>("features");
@@ -192,14 +189,14 @@ void ObjectMatcher::ReIDThread() {
     auto tags = reid_data->tags;
     auto features = reid_data->features;
 
-    std::vector<std::string> mapped_ids(ids.size(), std::string());
+    std::vector<std::string> mapped_ids(ids.size(), std::string()); // key:id_idx, value:uuid
     size_t mapped_count = 0;
 
     for (auto& m : track_buffer_) {
       m.second->SetMapped(false);
     }
 
-    // Phase 1
+    // Phase 1: Update features in track_buffer_ for known id
     for (size_t j = 0; j < ids.size(); j++) {
       const auto& id = ids[j];
       const auto& feature = features[j];
@@ -226,7 +223,7 @@ void ObjectMatcher::ReIDThread() {
 
     CHECK(mapped_count < ids.size());
     if (mapped_count < ids.size()) {
-      // Phase 2
+      // Phase 2: Calculate feature distance between tracks and match them to known tracks
       auto mapping = GetSortedMapping(ids, mapped_ids, features, source_idx);
       for (decltype(mapping.size()) j = 0; j < mapping.size(); j++) {
         auto index = std::get<0>(mapping[j]);
@@ -240,7 +237,7 @@ void ObjectMatcher::ReIDThread() {
         }
       }
 
-      // Phase 3
+      // Phase 3: Create and broadcast new tracks
       for (size_t j = 0; j < mapped_ids.size(); j++) {
         if (mapped_ids[j].empty()) {
           mapped_ids[j] = ids[j];
