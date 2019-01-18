@@ -103,8 +103,9 @@ class ObjectMatcher : public Operator {
     std::vector<std::string> tags;
     std::vector<std::vector<double>> features;
   };
-  ObjectMatcher(const std::string& type, size_t batch_size,
-                float distance_threshold, const ModelDesc& model_desc);
+  ObjectMatcher(const std::string& type, const std::string& summarization_mode,
+                size_t batch_size, float distance_threshold,
+                const ModelDesc& model_desc);
   static std::shared_ptr<ObjectMatcher> Create(const FactoryParamsType& params);
   static std::string GetSourceName(int index) {
     return "input" + std::to_string(index);

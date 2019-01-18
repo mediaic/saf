@@ -143,11 +143,13 @@ std::shared_ptr<Operator> SafPython::CreateExtractor(
 }
 
 std::shared_ptr<Operator> SafPython::CreateMatcher(
-    const std::string& matcher_type, const std::string& matcher_model,
-    float matcher_distance_threshold, size_t batch_size) {
+    const std::string& matcher_type, const std::string& matcher_summarization_mode, 
+    const std::string& matcher_model, float matcher_distance_threshold,
+    size_t batch_size) {
   auto model_desc = ModelManager::GetInstance().GetModelDesc(matcher_model);
   return std::make_shared<ObjectMatcher>(
-      matcher_type, batch_size, matcher_distance_threshold, model_desc);
+      matcher_type, matcher_summarization_mode, batch_size, 
+      matcher_distance_threshold, model_desc);
 }
 
 std::shared_ptr<Operator> SafPython::CreateWriter(const std::string& target,
@@ -508,7 +510,7 @@ BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(CreateDetector_overloads,
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(CreateExtractor_overloads,
                                        SafPython::CreateExtractor, 2, 3);
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(CreateMatcher_overloads,
-                                       SafPython::CreateMatcher, 3, 4);
+                                       SafPython::CreateMatcher, 4, 5);
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(CreateWriter_overloads,
                                        SafPython::CreateWriter, 2, 3);
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(CreateSender_overloads,

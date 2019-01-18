@@ -67,7 +67,9 @@ void Run(const std::vector<std::string>& camera_names,
          float detector_idle_duration, const std::string& detector_targets,
          int face_min_size, const std::string& tracker_type,
          const std::string& extractor_type, const std::string& extractor_model,
-         const std::string& matcher_type, float matcher_distance_threshold,
+         const std::string& matcher_type, 
+         const std::string& matcher_summarization_mode,
+         float matcher_distance_threshold,
          const std::string& matcher_model, const std::string& sender_endpoint,
          const std::string& sender_package_type, int frames) {
   // Silence complier warning sayings when certain options are turned off.
@@ -136,7 +138,8 @@ void Run(const std::vector<std::string>& camera_names,
   if (!matcher_type.empty()) {
     auto model_desc = model_manager.GetModelDesc(matcher_model);
     object_matcher = std::make_shared<ObjectMatcher>(
-        matcher_type, batch_size, matcher_distance_threshold, model_desc);
+        matcher_type, matcher_summarization_mode, batch_size, 
+        matcher_distance_threshold, model_desc);
     for (size_t i = 0; i < batch_size; i++) {
       if (!extractor_type.empty()) {
         object_matcher->SetSource(
@@ -406,6 +409,9 @@ int main(int argc, char* argv[]) {
   desc.add_options()("matcher_type",
                      po::value<std::string>()->default_value(""),
                      "The name of the matcher type to run");
+  desc.add_options()("matcher_summarization_mode",
+                     po::value<std::string>()->default_value(""),
+                     "The name of the matcher summarization mode to run");
   desc.add_options()("matcher_model",
                      po::value<std::string>()->default_value(""),
                      "The name of the matcher model to run");
@@ -459,6 +465,7 @@ int main(int argc, char* argv[]) {
   auto extractor_type = vm["extractor_type"].as<std::string>();
   auto extractor_model = vm["extractor_model"].as<std::string>();
   auto matcher_type = vm["matcher_type"].as<std::string>();
+  auto matcher_summarization_mode = vm["matcher_summarization_mode"].as<std::string>();
   auto matcher_model = vm["matcher_model"].as<std::string>();
   auto matcher_distance_threshold =
       vm["matcher_distance_threshold"].as<float>();
@@ -468,8 +475,8 @@ int main(int argc, char* argv[]) {
   Run(camera_names, detector_type, detector_model, display,
       detector_confidence_threshold, detector_idle_duration, detector_targets,
       face_min_size, tracker_type, extractor_type, extractor_model,
-      matcher_type, matcher_distance_threshold, matcher_model, sender_endpoint,
-      sender_package_type, frames);
+      matcher_type, matcher_summarization_mode, matcher_distance_threshold, 
+      matcher_model, sender_endpoint, sender_package_type, frames);
 
   return 0;
 }

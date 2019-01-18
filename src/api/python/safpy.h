@@ -50,6 +50,7 @@ class SafPython {
                                             const std::string& extractor_model,
                                             size_t batch_size = 1);
   std::shared_ptr<Operator> CreateMatcher(const std::string& matcher_type,
+                                          const std::string& matcher_summarization_mode,
                                           const std::string& matcher_model,
                                           float matcher_distance_threshold,
                                           size_t batch_size = 1);

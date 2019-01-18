@@ -24,11 +24,14 @@
 #include "utils/string_utils.h"
 #include "utils/time_utils.h"
 
-ObjectMatcher::ObjectMatcher(const std::string& type, size_t batch_size,
+ObjectMatcher::ObjectMatcher(const std::string& type, 
+                             const std::string& summarization_mode,
+                             size_t batch_size,
                              float distance_threshold,
                              const ModelDesc& model_desc)
     : Operator(OPERATOR_TYPE_OBJECT_MATCHER, {}, {}),
       type_(type),
+      summarization_mode_(summarization_mode),
       batch_size_(batch_size),
       distance_threshold_(distance_threshold),
       model_desc_(model_desc),
@@ -44,6 +47,7 @@ ObjectMatcher::ObjectMatcher(const std::string& type, size_t batch_size,
 std::shared_ptr<ObjectMatcher> ObjectMatcher::Create(
     const FactoryParamsType& params) {
   auto type = params.at("type");
+  auto summarization_mode = params.at("summarization_mode");
   auto batch_size = StringToSizet(params.at("batch_size"));
   auto distance_threshold = atof(params.at("distance_threshold").c_str());
 
@@ -52,18 +56,16 @@ std::shared_ptr<ObjectMatcher> ObjectMatcher::Create(
   CHECK(model_manager.HasModel(model_name));
   auto model_desc = model_manager.GetModelDesc(model_name);
 
-  return std::make_shared<ObjectMatcher>(type, batch_size, distance_threshold,
-                                         model_desc);
+  return std::make_shared<ObjectMatcher>(type, summarization_mode, batch_size, 
+                                         distance_threshold, model_desc);
 }
 
 bool ObjectMatcher::Init() {
   bool result = false;
   if (type_ == "euclidean") {
-    summarization_mode_ = "avg";
     matcher_ = std::make_unique<EuclideanMatcher>();
     result = matcher_->Init();
   } else if (type_ == "xqda") {
-    summarization_mode_ = "max";
     matcher_ = std::make_unique<XQDAMatcher>(model_desc_);
     result = matcher_->Init();
   } else {
