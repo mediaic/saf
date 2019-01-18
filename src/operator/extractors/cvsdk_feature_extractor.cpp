@@ -84,13 +84,9 @@ void CVSDKCNNFeatureExtractor::ExtractBatch(
           (y + h <= image.rows));
     cv::Rect roi(x, y, w, h);
     auto bbox_image = image(roi);
-    cv::Mat mean_image(bbox_image.size(), bbox_image.type(),
-                       cv::Scalar(104, 117, 124));
-    cv::Mat bbox_image_1;
-    cv::subtract(bbox_image, mean_image, bbox_image_1);
 
     /** Getting image data **/
-    auto data = OCVReaderGetData(bbox_image_1, item->second->getDims()[0],
+    auto data = OCVReaderGetData(bbox_image, item->second->getDims()[0],
                                  item->second->getDims()[1]);
     if (data.get() != nullptr) {
       vreader.push_back(data);
