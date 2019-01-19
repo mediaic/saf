@@ -62,12 +62,15 @@ class TrackInfo {
 
   const std::vector<double>& GetFeature() const { return summarized_feature_; }
   std::string GetID() const { return id_; }
+  bool GetActive() const { return active_; }
+  void SetActive(bool active) { active_ = active; }
   bool GetMapped() const { return mapped_; }
   void SetMapped(bool mapped) { mapped_ = mapped; }
-  void SetIDMapped(const std::string& id) { mapped_ids_.insert(id); }
-  bool IsIDMapped(const std::string& id) const {
-    return mapped_ids_.find(id) != mapped_ids_.end();
+  void SetIDMapped(const std::string& id) { mapped_id_ = id; }
+  bool IsIDMapped() const {
+    return mapped_id_.empty() == false;
   }
+  std::string GetIDMapped() const { return mapped_id_; }
   unsigned long GetLastTimestamp() { return last_timestamp_; }
 
  private:
@@ -78,8 +81,9 @@ class TrackInfo {
   unsigned long last_timestamp_;
   std::vector<double> summarized_feature_;
   bool mapped_;
+  bool active_;
   std::string summarization_mode_;
-  std::set<std::string> mapped_ids_;
+  std::string mapped_id_;
 };
 
 class BaseMatcher {
@@ -121,19 +125,19 @@ class ObjectMatcher : public Operator {
 
  private:
   void ReIDThread();
-  std::vector<std::tuple<size_t, TrackInfoPtr, double>> GetSortedMapping(
+  std::vector<std::tuple<TrackInfoPtr, TrackInfoPtr, double>> GetSortedMapping(
       const std::vector<std::string>& ids,
       const std::vector<std::string>& mapped_ids,
-      const std::vector<std::vector<double>>& features,
-      size_t track_buffer_index);
+      const std::vector<std::vector<double>>& features);
 
  private:
   std::string type_;
+  std::string summarization_mode_;
   size_t batch_size_;
   float distance_threshold_;
-  std::string summarization_mode_;
   ModelDesc model_desc_;
   std::unique_ptr<BaseMatcher> matcher_;
+  std::map<std::string, TrackInfoPtr> track_database_;
   std::map<std::string, TrackInfoPtr> track_buffer_;  // <id, TrackInfoPtr>
   std::vector<std::map<std::string, TrackInfoWeakPtr>>
       camera_track_buffers_;  // <camera_name, <id, TrackInfoWeakPtr>>

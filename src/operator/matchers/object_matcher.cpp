@@ -24,6 +24,9 @@
 #include "utils/string_utils.h"
 #include "utils/time_utils.h"
 
+using std::cout;
+using std::endl;
+
 ObjectMatcher::ObjectMatcher(const std::string& type, 
                              const std::string& summarization_mode,
                              size_t batch_size,
@@ -102,56 +105,33 @@ void ObjectMatcher::Process() {
     CHECK(ids.size() == tags.size());
     CHECK(ids.size() == features.size());
 
-    // Search the table, get result map
-    // We have 3 possiable ids
-    // key id
-    // mapped id
-    // new id
+    // Search track_buffer_ for id and return mapped_id
     std::vector<std::string> mapped_ids(ids.size(), std::string());
     size_t mapped_count = 0;
     for (size_t j = 0; j < ids.size(); j++) {
       const auto& id = ids[j];
       auto it = track_buffer_.find(id);
       if (it != track_buffer_.end()) {
-        mapped_ids[j] = id;
+        mapped_ids[j] = it->second->GetIDMapped();
         mapped_count++;
       } else {
-        // Iterate all mapped tables
-        for (const auto& m : track_buffer_) {
-          if (m.second->IsIDMapped(id)) {
-            mapped_ids[j] = m.second->GetID();
-            mapped_count++;
-            break;
-          }
-        }
+        mapped_ids[j] = id;
+        mapped_count++;
       }
     }
 
-    // Here we got mapped result
-    // We have 2 possiable ids
-    // key id
-    // new id
-    if (mapped_count < ids.size()) {
-      for (size_t j = 0; j < mapped_ids.size(); j++) {
-        if (mapped_ids[j].empty()) {
-          mapped_ids[j] = ids[j];
-          mapped_count++;
-        }
+    if (!reid_is_running) {
+      {
+        std::lock_guard<std::mutex> guard(reid_lock_);
+        reid_data = std::make_unique<ReIDData>();
+        reid_data->source_idx = i;
+        reid_data->camera_name = camera_name;
+        reid_data->ids = ids;
+        reid_data->timestamp = timestamp;
+        reid_data->tags = tags;
+        reid_data->features = features;
       }
-
-      if (!reid_is_running) {
-        {
-          std::lock_guard<std::mutex> guard(reid_lock_);
-          reid_data = std::make_unique<ReIDData>();
-          reid_data->source_idx = i;
-          reid_data->camera_name = camera_name;
-          reid_data->ids = ids;
-          reid_data->timestamp = timestamp;
-          reid_data->tags = tags;
-          reid_data->features = features;
-        }
-        reid_cv_.notify_all();
-      }
+      reid_cv_.notify_all();
     }
 
     CHECK(mapped_count == ids.size());
@@ -162,15 +142,26 @@ void ObjectMatcher::Process() {
   LOG(INFO) << "ObjectMatcher took " << timer.ElapsedMSec() << " ms";
 }
 
+std::string short_id(std::string s) {
+  cout << "OOO: " << s << endl;
+  if (s.length() <= 2 || s.empty()) {
+    cout << "WTF: " << s << endl;
+    return s;
+  } else {
+    return s.substr(s.length()-2);
+  }
+}
+
 void ObjectMatcher::ReIDThread() {
   while (reid_thread_run_) {
-    // Delete TrackInfo which deactived 3600 secs
+    // Delete outdated tracks (inactive for 3600 sec.) in track_database_
     auto now = GetTimeSinceEpochMillis();
-    for (auto it = track_buffer_.begin(); it != track_buffer_.end();) {
-      if (abs((long)(now - it->second->GetLastTimestamp())) > (3600 * 1000))
-        track_buffer_.erase(it++);
-      else
+    for (auto it = track_database_.begin(); it != track_database_.end();) {
+      if (abs((long)(now - it->second->GetLastTimestamp())) > (3600 * 1000)) {
+        track_database_.erase(it++);
+      } else {
         it++;
+      }
     }
 
     reid_data.reset();
@@ -195,110 +186,118 @@ void ObjectMatcher::ReIDThread() {
     size_t mapped_count = 0;
 
     for (auto& m : track_buffer_) {
+      m.second->SetActive(false);
       m.second->SetMapped(false);
     }
 
     // Phase 1: Update features in track_buffer_ for known id
+    // Phase 2: Create new track in track_buffer_ for unmapped id
     for (size_t j = 0; j < ids.size(); j++) {
       const auto& id = ids[j];
+      const auto& tag = tags[j];
       const auto& feature = features[j];
       auto it = track_buffer_.find(id);
       if (it != track_buffer_.end()) {
         mapped_ids[j] = id;
         mapped_count++;
         it->second->UpdateFeature(source_idx, timestamp, feature);
-        it->second->SetMapped(true);
+        it->second->SetActive(true);
       } else {
-        // Iterate all mapped tables
-        for (const auto& m : track_buffer_) {
-          if (m.second->IsIDMapped(id)) {
-            mapped_ids[j] = m.second->GetID();
-            mapped_count++;
-            m.second->UpdateFeature(source_idx, timestamp, feature);
-            CHECK(m.second->GetMapped() == false);
-            m.second->SetMapped(true);
-            break;
-          }
-        }
+        mapped_ids[j] = id;
+        mapped_count++;
+
+        // Create new track into track_buffer
+        auto new_track_info = std::make_shared<TrackInfo>(
+            camera_name, id, tag, summarization_mode_);
+        track_buffer_[id] = new_track_info;
+        new_track_info->UpdateFeature(source_idx, timestamp, feature);
+        new_track_info->SetActive(true);
       }
     }
-
-    CHECK(mapped_count < ids.size());
-    if (mapped_count < ids.size()) {
-      // Phase 2: Calculate feature distance between tracks and match them to known tracks
-      auto mapping = GetSortedMapping(ids, mapped_ids, features, source_idx);
-      for (decltype(mapping.size()) j = 0; j < mapping.size(); j++) {
-        auto index = std::get<0>(mapping[j]);
-        auto track_info = std::get<1>(mapping[j]);
-        if (mapped_ids[index].empty() && track_info->GetMapped() == false) {
-          mapped_ids[index] = track_info->GetID();
-          mapped_count++;
-          track_info->SetIDMapped(ids[index]);
-          track_info->UpdateFeature(source_idx, timestamp, features[index]);
-          track_info->SetMapped(true);
-        }
-      }
-
-      // Phase 3: Create and broadcast new tracks
-      for (size_t j = 0; j < mapped_ids.size(); j++) {
-        if (mapped_ids[j].empty()) {
-          mapped_ids[j] = ids[j];
-          mapped_count++;
-          const auto& id = ids[j];
-          const auto& tag = tags[j];
-          const auto& feature = features[j];
-
-          // Create new track into track_buffer
-          auto new_track_info = std::make_shared<TrackInfo>(
-              camera_name, id, tag, summarization_mode_);
-          track_buffer_[id] = new_track_info;
-          // Broadcast the track into network
-          for (auto& m : camera_track_buffers_) {
-            m[id] = new_track_info;
-          }
-
-          new_track_info->UpdateFeature(source_idx, timestamp, feature);
-          new_track_info->SetMapped(true);
-        }
-      }
-    }
-
     CHECK(mapped_count == ids.size());
+
+    // Phase 3: Move inactive tracks in track_buffer_ to track_database_
+    for (auto it = track_buffer_.begin(); it != track_buffer_.end();) {
+      if (it->second->GetActive() == false) {
+        auto mapped_id = it->second->GetIDMapped();
+        auto feature = it->second->GetFeature();
+        auto matched_history = track_database_.find(mapped_id);
+        if (matched_history != track_database_.end()) {
+          matched_history->second->UpdateFeature(source_idx, timestamp, feature);
+          matched_history->second->SetIDMapped(mapped_id);
+        } else {
+          track_database_[it->second->GetID()] = it->second;
+        }
+        track_buffer_.erase(it++);
+      } else {
+        it++;
+      }
+    }
+
+
+    // Phase 4: Match tracks in track_buffer_ with tracks in track_database_
+    auto mapping = GetSortedMapping(ids, mapped_ids, features);
+    for (decltype(mapping.size()) j = 0; j < mapping.size(); j++) {
+      auto buffer_track_info = std::get<0>(mapping[j]);
+      auto database_track_info = std::get<1>(mapping[j]);
+      if (buffer_track_info->GetMapped() == false) {
+        buffer_track_info->SetIDMapped(database_track_info->GetID());
+        buffer_track_info->SetMapped(true);
+      }
+    }
+    for (auto m: track_buffer_) {
+      if (m.second->GetMapped() == false) {
+        m.second->SetIDMapped(m.second->GetID());
+        m.second->SetMapped(true);
+      }
+    }
+
+    //==========================
+    /*cout << ">>>>>>>>>>>>>>" << endl;
+    cout << "Input frame:" << endl;
+    for (size_t j=0; j < ids.size(); j++) {
+        cout << short_id(ids[j]) << endl;
+    }
+    cout << "Track_buffer_:" << endl;
+    for (auto m: track_buffer_) {
+        cout << "ID: " << short_id(m.second->GetID()) << ", Mapped ID: " << short_id(m.second->GetIDMapped()) << endl;
+    }
+    cout << "Track_database_:" << endl;
+    for (auto m: track_database_) {
+        cout << "ID: " << short_id(m.second->GetID()) << ", Mapped ID: " << short_id(m.second->GetIDMapped()) << endl;
+    }
+    cout << "<<<<<<<<<<<<<<<" << endl; */
+    //==========================
+
   }
 }
 
-std::vector<std::tuple<size_t, TrackInfoPtr, double>>
+std::vector<std::tuple<TrackInfoPtr, TrackInfoPtr, double>>
 ObjectMatcher::GetSortedMapping(
     const std::vector<std::string>& ids,
     const std::vector<std::string>& mapped_ids,
-    const std::vector<std::vector<double>>& features,
-    size_t track_buffer_index) {
-  std::vector<std::tuple<size_t, TrackInfoPtr, double>> mapping;
+    const std::vector<std::vector<double>>& features) {
+  //std::cout << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" << std::endl;
+  std::vector<std::tuple<TrackInfoPtr, TrackInfoPtr, double>> mapping;
   CHECK(ids.size() == features.size());
   CHECK(mapped_ids.size() == features.size());
 
-  auto& camera_track_buffer = camera_track_buffers_[track_buffer_index];
-  for (size_t i = 0; i < ids.size(); i++) {
-    if (mapped_ids[i].empty()) {
-      for (auto it = camera_track_buffer.begin();
-           it != camera_track_buffer.end();) {
-        if (auto track_info = it->second.lock()) {
-          if (track_info->GetMapped() == false) {
-            auto dist = matcher_->Match(features[i], track_info->GetFeature());
-            mapping.push_back(std::make_tuple(i, track_info, dist));
-          }
-
-          it++;
-        } else {
-          camera_track_buffer.erase(it++);
-        }
-      }
+  for (auto buffer_it: track_buffer_) {
+    auto buffer_track_info = buffer_it.second;
+    //std::cout << ">>>>> Trying to match " << short_id(buffer_track_info->GetID()) << " to previous id" << std::endl;
+    for (auto database_it: track_database_) {
+      auto database_track_info = database_it.second;
+      auto dist = matcher_->Match(buffer_track_info->GetFeature(), database_track_info->GetFeature());
+      //std::cout << "================= " << short_id(buffer_track_info->GetID()) << "<->" << short_id(database_track_info->GetID()) << " =================" << std::endl;
+      //std::cout << dist << std::endl;
+      //std::cout << "===========================================" << std::endl;
+      mapping.push_back(std::make_tuple(buffer_track_info, database_track_info, dist));
     }
   }
 
   std::sort(mapping.begin(), mapping.end(),
-            [](std::tuple<size_t, TrackInfoPtr, double>& t1,
-               std::tuple<size_t, TrackInfoPtr, double>& t2) {
+            [](std::tuple<TrackInfoPtr, TrackInfoPtr, double>& t1,
+               std::tuple<TrackInfoPtr, TrackInfoPtr, double>& t2) {
               auto dist1 = std::get<2>(t1);
               auto dist2 = std::get<2>(t2);
               return dist1 < dist2;
@@ -314,7 +313,7 @@ ObjectMatcher::GetSortedMapping(
     }
   }
 
-  return found ? std::vector<std::tuple<size_t, TrackInfoPtr, double>>(
+  return found ? std::vector<std::tuple<TrackInfoPtr, TrackInfoPtr, double>>(
                      mapping.begin(), mapping.begin() + (*found) + 1)
-               : std::vector<std::tuple<size_t, TrackInfoPtr, double>>();
+               : std::vector<std::tuple<TrackInfoPtr, TrackInfoPtr, double>>();
 }

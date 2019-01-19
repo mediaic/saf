@@ -318,7 +318,12 @@ void Run(const std::vector<std::string>& camera_names,
           std::ostringstream text;
           text << tags[j];
           std::size_t pos = ids[j].size();
-          auto sheared_id = ids[j].substr(pos - 2);
+          std::string sheared_id;
+          if (pos < 2) {
+            sheared_id = ids[j];
+          } else {
+            sheared_id = ids[j].substr(pos - 2);
+          }
           text << ": " << sheared_id;
           cv::Size text_size = cv::getTextSize(text.str().c_str(), fontface,
                                                d_scale, thickness, &baseline);
